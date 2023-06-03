@@ -1,0 +1,57 @@
+name: 'Build Unchained GeckoDriver'
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  check-for-new-version:
+    runs-on: ubuntu-latest
+    outputs:
+      WILL_BUILD: ${{ steps.check.outputs.WILL_BUILD }}
+    steps:
+      - name: Check
+        id: check
+        run: |
+          TAG_NAME="$(curl -sL https://api.github.com/repos/rafiibrahim8/geckodriver-unchained/releases/latest | jq -r '.tag_name')"
+          FIREFOX_VERSION="$(curl -sL https://product-details.mozilla.org/1.0/firefox_versions.json | jq -r '.LATEST_FIREFOX_VERSION')"
+          
+          if [[ "$TAG_NAME" == *"$FIREFOX_VERSION"* ]]; then
+            echo "No new version found. Building will be skipped."
+            echo "WILL_BUILD=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "New version found. Building will be continued."
+            echo "WILL_BUILD=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-and-publish:
+    needs: check-for-new-version
+    if: ${{ needs.check-for-new-version.outputs.WILL_BUILD == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install Dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y gcc-mingw-w64 
+          rustup target add x86_64-pc-windows-gnu x86_64-unknown-linux-musl
+      - name: Run build
+        run: |
+          make linux windows
+          sh prepare-for-publish.sh
+          echo "BUILDX_FIREFOX_VERSION=$(cat build/FIREFOX_VERSION.txt)" >> "$GITHUB_ENV"
+          echo "BUILDX_GECKODRIVER_VERSION=$(cat build/GECKODRIVER_VERSION.txt)" >> "$GITHUB_ENV"
+      - name: Publish
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            build/bin/*
+          tag_name: ${{ env.BUILDX_GECKODRIVER_VERSION }}-ff-${{ env.BUILDX_FIREFOX_VERSION }}
+          name: ${{ env.BUILDX_GECKODRIVER_VERSION }}-ff-${{ env.BUILDX_FIREFOX_VERSION }}
+          body: |
+            GeckoDriver Unchained built for Firefox ${{ env.BUILDX_FIREFOX_VERSION }}
+            GeckoDriver version ${{ env.BUILDX_GECKODRIVER_VERSION }}
