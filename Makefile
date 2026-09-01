@@ -4,6 +4,7 @@ FIREFOX_VERSION := $(shell curl -sL https://product-details.mozilla.org/1.0/fire
 VARIANT := unchained
 ROOT_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 GPG_KEY := 14F26682D0916CDD81E37B6D61B7B526D98F0353
+GNUPG_DIR := $(ROOT_DIR)/$(BUILD_DIR)/gnupg
 
 all: linux windows arm_mac intel_mac
 
@@ -45,8 +46,16 @@ else
 	@echo "Downloading Firefox $(FIREFOX_VERSION)..."
 	@curl --fail-with-body -Lso "$(BUILD_DIR)/firefox-$(FIREFOX_VERSION).tar.xz" "https://archive.mozilla.org/pub/firefox/releases/$(FIREFOX_VERSION)/source/firefox-$(FIREFOX_VERSION).source.tar.xz"
 	@curl --fail-with-body -Lso "$(BUILD_DIR)/firefox-$(FIREFOX_VERSION).tar.xz.asc" "https://archive.mozilla.org/pub/firefox/releases/$(FIREFOX_VERSION)/source/firefox-$(FIREFOX_VERSION).source.tar.xz.asc"
-	@gpg --keyserver keyserver.ubuntu.com --recv-keys $(GPG_KEY)
-	@gpg --verify "$(BUILD_DIR)/firefox-$(FIREFOX_VERSION).tar.xz.asc" "$(BUILD_DIR)/firefox-$(FIREFOX_VERSION).tar.xz"
+	@curl --fail-with-body -Lso "$(BUILD_DIR)/mozilla-release.key" "https://archive.mozilla.org/pub/firefox/releases/$(FIREFOX_VERSION)/KEY"
+	@rm -rf "$(GNUPG_DIR)" && mkdir -p -m 700 "$(GNUPG_DIR)"
+	@GNUPGHOME="$(GNUPG_DIR)" gpg --batch --quiet --import "$(BUILD_DIR)/mozilla-release.key"
+	@GNUPGHOME="$(GNUPG_DIR)" gpg --batch --status-fd 1 --verify \
+		"$(BUILD_DIR)/firefox-$(FIREFOX_VERSION).tar.xz.asc" \
+		"$(BUILD_DIR)/firefox-$(FIREFOX_VERSION).tar.xz" \
+		> "$(BUILD_DIR)/gpg-status.txt" || { cat "$(BUILD_DIR)/gpg-status.txt"; exit 1; }
+	@grep -q "^\[GNUPG:\] VALIDSIG [0-9A-F]\{40\} .* $(GPG_KEY)$$" "$(BUILD_DIR)/gpg-status.txt" \
+		|| { echo "ERROR: signature is not from Mozilla key $(GPG_KEY)"; cat "$(BUILD_DIR)/gpg-status.txt"; exit 1; }
+	@echo "Signature verified against $(GPG_KEY)."
 	@echo "Extracting Firefox $(FIREFOX_VERSION)..."
 	@tar -xf "$(BUILD_DIR)/firefox-$(FIREFOX_VERSION).tar.xz" -C "$(BUILD_DIR)"
 	@cd "$(BUILD_DIR)/firefox-$(FIREFOX_VERSION)" && patch -p1 < "$(ROOT_DIR)/unchained.patch"
