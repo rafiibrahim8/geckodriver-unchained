@@ -45,7 +45,9 @@ else
 	@echo "Downloading Firefox $(FIREFOX_VERSION)..."
 	@curl --fail-with-body -Lso "$(BUILD_DIR)/firefox-$(FIREFOX_VERSION).tar.xz" "https://archive.mozilla.org/pub/firefox/releases/$(FIREFOX_VERSION)/source/firefox-$(FIREFOX_VERSION).source.tar.xz"
 	@curl --fail-with-body -Lso "$(BUILD_DIR)/firefox-$(FIREFOX_VERSION).tar.xz.asc" "https://archive.mozilla.org/pub/firefox/releases/$(FIREFOX_VERSION)/source/firefox-$(FIREFOX_VERSION).source.tar.xz.asc"
-	@gpg --keyserver keyserver.ubuntu.com --recv-keys $(GPG_KEY)
+	@curl --fail-with-body -Lso "$(BUILD_DIR)/mozilla-release.key" "https://archive.mozilla.org/pub/firefox/releases/$(FIREFOX_VERSION)/KEY"
+	@gpg --import "$(BUILD_DIR)/mozilla-release.key"
+	@gpg --list-keys "$(GPG_KEY)" > /dev/null
 	@gpg --verify "$(BUILD_DIR)/firefox-$(FIREFOX_VERSION).tar.xz.asc" "$(BUILD_DIR)/firefox-$(FIREFOX_VERSION).tar.xz"
 	@echo "Extracting Firefox $(FIREFOX_VERSION)..."
 	@tar -xf "$(BUILD_DIR)/firefox-$(FIREFOX_VERSION).tar.xz" -C "$(BUILD_DIR)"
